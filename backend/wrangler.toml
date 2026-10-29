@@ -1,11 +1,11 @@
-name = "thermohub-api"
+﻿name = "thermohub-api"
 main = "src/index.js"
 compatibility_date = "2025-06-01"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "thermohub"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"   # from: npx wrangler d1 create thermohub
+database_id = "ac11b553-ed30-4db4-b2de-2fe50d270159"
 
 [vars]
 # Application (client) ID of the multi-tenant Entra app registration.
