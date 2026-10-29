@@ -1,0 +1,5 @@
+aiohomekit==4.0.1
+aiohttp==3.14.5
+zeroconf==0.151.5
+pywin32==312
+pyinstaller==6.22.3

@@ -2,3 +2,10 @@ node_modules/
 .wrangler/
 .dev.vars
 *.log
+
+# hub build
+.venv/
+__pycache__/
+hub/build/
+hub/dist/
+hub/Output/
