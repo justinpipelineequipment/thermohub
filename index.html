@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ThermoHub</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/"><span class="logo" aria-hidden="true"></span><span id="app-name">ThermoHub</span></a>
+    <div class="top-controls" id="top-controls"></div>
+  </header>
+  <div id="demo-banner" class="demo-banner" hidden>
+    Demo mode: thermostats are simulated. The live version will use Microsoft 365 sign-in and your onsite hubs.
+  </div>
+  <div class="layout">
+    <nav class="sidenav" id="nav"></nav>
+    <main id="main"></main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/demo-data.js"></script>
+  <script src="js/permissions.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
