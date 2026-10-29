@@ -9,10 +9,10 @@ database_id = "ac11b553-ed30-4db4-b2de-2fe50d270159"
 
 [vars]
 # Application (client) ID of the multi-tenant Entra app registration.
-ENTRA_CLIENT_ID = "REPLACE_WITH_CLIENT_ID"
+ENTRA_CLIENT_ID = "c9e15178-c466-40ad-a771-5caf5fbbef74"
 # Your own Microsoft 365 tenant ID; platform admins must sign in from it.
-PLATFORM_TENANT_ID = "REPLACE_WITH_YOUR_TENANT_ID"
+PLATFORM_TENANT_ID = "a00aac50-8304-4dfc-af43-11f2b9f679ad"
 # Comma-separated platform admin sign-in emails.
 PLATFORM_ADMIN_EMAILS = "justin@pipelineequipment.com"
 # Comma-separated origins allowed to call the API (the dashboard's address).
-ALLOWED_ORIGINS = "http://localhost:8788"
+ALLOWED_ORIGINS = "http://localhost:8788,https://thermohub-web.thermohub-api.workers.dev"
