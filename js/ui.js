@@ -22,6 +22,11 @@ window.UI = (function () {
       d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
 
+  // 'Oct 30, 2026, 2:15 PM'
+  function dateTime(ts) {
+    return new Date(ts).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
   function until(ts) { return ts ? 'until ' + when(ts) : 'indefinitely'; }
 
   function badge(text, kind) { return `<span class="badge badge-${kind}">${esc(text)}</span>`; }
@@ -111,5 +116,5 @@ window.UI = (function () {
     toastTimer = setTimeout(() => { el.className = 'toast'; }, 3500);
   }
 
-  return { esc, temp, timeAgo, when, until, badge, holdBadge, equipBadge, motionDot, motionTimeline, motionPopup, clock, hoursSummary, toast };
+  return { esc, temp, timeAgo, when, dateTime, until, badge, holdBadge, equipBadge, motionDot, motionTimeline, motionPopup, clock, hoursSummary, toast };
 })();

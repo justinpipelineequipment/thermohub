@@ -478,7 +478,7 @@ window.Views = (function () {
         <div class="card pad">
           <h3>Recent activity</h3>
           ${events.length ? `<ul class="list">${events.map(a =>
-            `<li><span class="muted">${UI.timeAgo(a.ts)}</span> · ${esc(a.userName)}: ${esc(a.text)}</li>`).join('')}</ul>`
+            `<li><span class="muted nowrap">${UI.dateTime(a.ts)}</span> · ${esc(a.userName)}: ${esc(a.text)}</li>`).join('')}</ul>`
             : `<p class="muted">No changes yet.</p>`}
         </div>`,
     };
@@ -642,7 +642,7 @@ window.Views = (function () {
       title: 'Activity', live: true,
       html: `<div class="page-head"><h1>Activity</h1><p class="sub">Every change and motion override, newest first.</p></div>
         <div class="card pad">${entries.length ? `<ul class="list">${entries.map(a =>
-          `<li><span class="muted nowrap">${new Date(a.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+          `<li><span class="muted nowrap">${UI.dateTime(a.ts)}</span>
             · <strong>${esc(a.userName)}</strong>${multi ? ` <span class="muted">(${esc(S.business(a.businessId).name)})</span>` : ''}: ${esc(a.text)}</li>`).join('')}</ul>`
           : `<p class="muted">Nothing yet. Changes and motion overrides will show here.</p>`}</div>`,
     };
