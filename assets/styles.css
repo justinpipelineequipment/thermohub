@@ -186,6 +186,7 @@ a.kpi:hover { border-color: var(--accent); }
 a.kpi.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset, var(--shadow); }
 .kpi.ok .kpi-val { color: var(--ok); }
 .kpi.warn .kpi-val { color: var(--danger); }
+.kpi.motion { width: auto; height: auto; margin: 0; border-radius: var(--radius); background: var(--surface); vertical-align: initial; }  /* undo the .motion dot */
 .kpi.motion .kpi-val { color: var(--motion); }
 .kpi.hold .kpi-val { color: var(--hold); }
 
