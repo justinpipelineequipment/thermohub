@@ -68,3 +68,14 @@ CREATE TABLE IF NOT EXISTS audit (
   thermostat_id  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_audit_business_ts ON audit(business_id, ts DESC);
+
+-- Motion periods, recorded from hub reports (occupied false -> true -> false). Kept one year.
+CREATE TABLE IF NOT EXISTS motion (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id    TEXT NOT NULL,
+  thermostat_id  TEXT NOT NULL,
+  start_ts       INTEGER NOT NULL,
+  end_ts         INTEGER                        -- NULL while motion continues
+);
+CREATE INDEX IF NOT EXISTS idx_motion_business_start ON motion(business_id, start_ts);
+CREATE INDEX IF NOT EXISTS idx_motion_thermostat_open ON motion(thermostat_id, end_ts);

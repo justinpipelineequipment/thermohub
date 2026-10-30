@@ -10,6 +10,7 @@ const r = (method, path, handler, auth = 'user') => [method, new RegExp(`^${path
 const ROUTES = [
   r('GET', '/api/me', U.me),
   r('GET', '/api/state', U.state),
+  r('GET', '/api/motion', U.motion),
 
   r('POST', `/api/thermostats/${ID}/mode`, U.setMode),
   r('POST', `/api/thermostats/${ID}/hold`, U.setHold),

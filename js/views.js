@@ -411,6 +411,7 @@ window.Views = (function () {
     const s = S.scheduleOf(t);
     const events = S.state.audit.filter(a => a.thermostatId === t.id).slice(0, 8);
     const modes = ['heat', 'cool', 'auto', 'off'];
+    const motion = S.motionHistory(t.id);
 
     return {
       title: t.name, live: true,
@@ -460,6 +461,10 @@ window.Views = (function () {
               </div>`
               : `<p class="muted">${online ? 'You have view-only access.' : 'Controls are unavailable while the hub is offline.'}</p>`}
           </div>
+        </div>
+        <div class="card pad">
+          <h3>Motion, last 24 hours</h3>
+          ${motion.loaded ? UI.motionTimeline(motion) : '<p class="muted">Loading motion history…</p>'}
         </div>
         ${Perm.isBusinessAdmin(u, t.businessId) ? `<div class="card pad">
           <h3>Name and building</h3>

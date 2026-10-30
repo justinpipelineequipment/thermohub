@@ -375,11 +375,50 @@ window.Store = (function () {
     },
   };
 
+  // ---------- motion history (last 24 hours) ----------
+  const DAY_MS = 86400000;
+  let motionData = { loaded: false, periods: {} }, motionAt = 0;  // live: from /api/motion, refetched each minute
+  const demoMotion = {};                                          // demo: thermostatId -> [[start, end|null], ...]
+
+  function demoPeriods(id, now) {
+    if (!demoMotion[id]) {  // seed a made-up day
+      const list = [];
+      for (let ts = now - DAY_MS + Math.random() * 3600000; ; ) {
+        ts += (20 + Math.random() * 150) * 60000;
+        const len = (2 + Math.random() * 30) * 60000;
+        if (ts + len >= now - 60000) break;
+        list.push([ts, ts + len]);
+        ts += len;
+      }
+      demoMotion[id] = list;
+    }
+    return demoMotion[id];
+  }
+
+  // { loaded, since, until, periods: [[start, end], ...] } for one thermostat.
+  function motionHistory(id) {
+    const now = Date.now();
+    if (DEMO) {
+      const since = now - DAY_MS;
+      return { loaded: true, since, until: now, periods: demoPeriods(id, now)
+        .filter(p => p[1] == null || p[1] > since).map(([s, e]) => [Math.max(s, since), e == null ? now : e]) };
+    }
+    return { loaded: motionData.loaded, since: motionData.since, until: motionData.until, periods: motionData.periods[id] || [] };
+  }
+
+  function refreshMotion() {
+    if (Date.now() - motionAt < 60000) return;
+    motionAt = Date.now();
+    Api.call('GET', '/api/motion').then(m => { motionData = { ...m, loaded: true }; emit('tick'); })
+      .catch(e => { motionAt = 0; console.warn('Motion history failed', e); });
+  }
+
   // ---------- live: API-backed mutations ----------
   async function refresh() {
     const s = await Api.call('GET', '/api/state');
     const sel = state.selectedBusinessId || (Perm.isPlatform(s.user) ? 'all' : s.user.businessId);
     state = { ...s, me: s.user, selectedBusinessId: sel };
+    refreshMotion();
   }
 
   // Wraps an API call: run it, reload state, re-render, return its result.
@@ -455,9 +494,14 @@ window.Store = (function () {
       if (t.hold && t.hold.until && t.hold.until <= now) t.hold = null;
 
       const schedOcc = isScheduledOccupied(scheduleOf(t), new Date(now));
+      const was = t.occupied;
       if (t.occupied) { if (Math.random() < 0.12) t.occupied = false; }
       else if (Math.random() < (schedOcc ? 0.2 : 0.015)) t.occupied = true;
       if (t.occupied) t.lastMotion = now;
+      const log24 = demoPeriods(t.id, now);
+      if (t.occupied && !was) log24.push([now, null]);
+      const last = log24[log24.length - 1];
+      if (!t.occupied && last && last[1] == null) last[1] = now;
 
       applyMotionRule(t, now);
       applyRecovery(t, now);
@@ -490,7 +534,7 @@ window.Store = (function () {
     business, building, thermostat, schedule, user, currentUser, buildingOf, businessOf, scheduleOf,
     thermostatsIn, unplacedIn, thermostatsUsing, buildingsUsing, schedulesFor,
     visibleBusinesses, visibleBuildings, canEditSchedule, localAdjustOf,
-    isScheduledOccupied, nextScheduleChange, buildingOpenState, effective, activeHold, hubOnline, recoveryPlan,
+    isScheduledOccupied, nextScheduleChange, buildingOpenState, effective, activeHold, hubOnline, recoveryPlan, motionHistory,
     actions: DEMO ? demoActions : liveActions,
   };
 })();

@@ -40,10 +40,44 @@ window.UI = (function () {
     return badge('Idle', 'muted');
   }
 
+  // Hovering shows the last 24 hours of motion (popup handled in app.js).
   function motionDot(t) {
-    return t.occupied
-      ? `<span class="motion on" title="Motion detected now"></span>Motion`
-      : `<span class="motion" title="No motion"></span>${esc(t.lastMotion ? timeAgo(t.lastMotion) : 'No motion')}`;
+    return `<span class="motion-hover" data-motion="${esc(t.id)}">${t.occupied
+      ? `<span class="motion on"></span>Motion`
+      : `<span class="motion"></span>${esc(t.lastMotion ? timeAgo(t.lastMotion) : 'No motion')}`}</span>`;
+  }
+
+  const clockTime = ts => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  function duration(ms) {
+    const m = Math.round(ms / 60000);
+    return m < 60 ? m + ' min' : Math.floor(m / 60) + ' hr' + (m % 60 ? ' ' + (m % 60) + ' min' : '');
+  }
+
+  // h: Store.motionHistory() result. Bar of motion periods with a tick every 6 hours.
+  function motionTimeline(h) {
+    const span = h.until - h.since;
+    const pct = ts => ((ts - h.since) / span * 100).toFixed(2);
+    const bars = h.periods.map(([s, e]) =>
+      `<span class="mt-bar" style="left:${pct(s)}%;width:${Math.max((e - s) / span * 100, 0.3).toFixed(2)}%"
+        title="${clockTime(s)} – ${clockTime(e)} (${duration(e - s)})"></span>`).join('');
+    const ticks = [];
+    const d = new Date(h.since);
+    d.setMinutes(0, 0, 0);
+    d.setHours(Math.ceil((d.getHours() + 1) / 6) * 6);
+    for (; d.getTime() < h.until; d.setHours(d.getHours() + 6)) {
+      ticks.push(`<span class="mt-tick" style="left:${pct(d.getTime())}%">${d.toLocaleTimeString([], { hour: 'numeric' })}</span>`);
+    }
+    const total = h.periods.reduce((a, [s, e]) => a + e - s, 0);
+    return `<div class="mt"><div class="mt-track">${bars}</div><div class="mt-ticks">${ticks.join('')}</div></div>
+      <div class="muted small">${h.periods.length
+        ? `${h.periods.length} motion period${h.periods.length === 1 ? '' : 's'}, ${duration(total)} in total`
+        : 'No motion in the last 24 hours'}</div>`;
+  }
+
+  function motionPopup(t) {
+    const h = Store.motionHistory(t.id);
+    return `<div class="strong">${esc(t.name)}: motion, last 24 hours</div>${h.loaded
+      ? motionTimeline(h) : '<div class="muted small">Loading motion history…</div>'}`;
   }
 
   // '07:00' -> '7 AM', '16:30' -> '4:30 PM'
@@ -77,5 +111,5 @@ window.UI = (function () {
     toastTimer = setTimeout(() => { el.className = 'toast'; }, 3500);
   }
 
-  return { esc, temp, timeAgo, when, until, badge, holdBadge, equipBadge, motionDot, clock, hoursSummary, toast };
+  return { esc, temp, timeAgo, when, until, badge, holdBadge, equipBadge, motionDot, motionTimeline, motionPopup, clock, hoursSummary, toast };
 })();

@@ -1,9 +1,10 @@
 // Hub API: each business's onsite hub polls these (outbound HTTPS only, no tunnel needed).
 //   GET  /hub/config  -> schedules + desired thermostat settings (fetch when configVersion changes)
 //   POST /hub/report  -> current thermostat readings and hub-side events (motion overrides, recovery)
-import { HttpError, newId } from './util.js';
+import { HttpError, newId, parse } from './util.js';
 
 const EQUIPMENT = ['idle', 'heating', 'cooling'];
+const MOTION_KEEP_MS = 366 * 86400000;
 const finite = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const str = (v, max) => String(v == null ? '' : v).slice(0, max);
 
@@ -51,19 +52,28 @@ export async function report({ env, hub, body }) {
   if (!body || typeof body !== 'object') throw new HttpError(400, 'Report body missing.');
   const now = Date.now();
   const list = Array.isArray(body.thermostats) ? body.thermostats.slice(0, 500) : [];
-  const existing = new Map((await env.DB.prepare('SELECT id, entity FROM thermostats WHERE business_id = ?')
-    .bind(hub.businessId).all()).results.map(r => [r.entity, r.id]));
+  const rows = (await env.DB.prepare('SELECT id, entity, state FROM thermostats WHERE business_id = ?')
+    .bind(hub.businessId).all()).results;
+  const existing = new Map(rows.map(r => [r.entity, r.id]));
+  const wasOccupied = new Map(rows.map(r => [r.id, !!(parse(r.state) || {}).occupied]));
 
   const stmts = [];
+  const motionStart = id => env.DB.prepare('INSERT INTO motion (business_id, thermostat_id, start_ts) VALUES (?, ?, ?)')
+    .bind(hub.businessId, id, now);
   for (const t of list) {
     const entity = str(t.entity, 200);
     if (!/^climate\.[a-z0-9_]+$/.test(entity)) continue;
-    const state = JSON.stringify(cleanState(t.state));
+    const clean = cleanState(t.state);
+    const state = JSON.stringify(clean);
     const model = str(t.model || 'ecobee', 100);
     const id = existing.get(entity);
     if (id) {
       stmts.push(env.DB.prepare('UPDATE thermostats SET state = ?, reported_at = ?, model = ? WHERE id = ?')
         .bind(state, now, model, id));
+      if (clean.occupied && !wasOccupied.get(id)) stmts.push(motionStart(id));
+      if (!clean.occupied && wasOccupied.get(id)) {
+        stmts.push(env.DB.prepare('UPDATE motion SET end_ts = ? WHERE thermostat_id = ? AND end_ts IS NULL').bind(now, id));
+      }
     } else {
       const newIdValue = newId('t');
       const name = str(t.name || entity, 80);
@@ -73,7 +83,12 @@ export async function report({ env, hub, body }) {
           .bind(newIdValue, hub.businessId, name, entity, model, state, now),
         env.DB.prepare('INSERT INTO audit (ts, business_id, user_name, text, thermostat_id) VALUES (?, ?, ?, ?, ?)')
           .bind(now, hub.businessId, 'Hub', `New thermostat found: ${name}. Assign it to a building.`, newIdValue));
+      if (clean.occupied) stmts.push(motionStart(newIdValue));
     }
+  }
+  if (Math.random() < 0.01) {  // ~every 25 min per hub is plenty for a one-year limit
+    stmts.push(env.DB.prepare('DELETE FROM motion WHERE business_id = ? AND start_ts < ? AND end_ts IS NOT NULL')
+      .bind(hub.businessId, now - MOTION_KEEP_MS));
   }
 
   const events = Array.isArray(body.events) ? body.events.slice(0, 100) : [];

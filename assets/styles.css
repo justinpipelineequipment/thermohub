@@ -153,6 +153,16 @@ main { flex: 1; min-width: 0; padding: 1.25rem 1.25rem 3rem; }
 
 .motion { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--border); margin-right: .4rem; vertical-align: middle; }
 .motion.on { background: var(--motion); box-shadow: 0 0 0 3px var(--motion-bg); }
+.motion-hover { cursor: help; border-bottom: 1px dotted var(--border); }
+.motion-pop { position: fixed; z-index: 50; width: min(420px, calc(100vw - 16px)); background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: .7rem .85rem; box-shadow: 0 8px 24px rgba(16, 24, 40, .18); pointer-events: none; }
+/* motion timeline */
+.mt { margin: .6rem 0 .35rem; }
+.mt-track { position: relative; height: 22px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.mt-bar { position: absolute; top: 0; bottom: 0; background: var(--motion); }
+.mt-ticks { position: relative; height: 1.1rem; font-size: .72rem; color: var(--text-2); }
+.mt-tick { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; }
+.mt-tick::before { content: ''; position: absolute; left: 50%; top: -5px; height: 4px; border-left: 1px solid var(--border); }
 
 .tabs { display: flex; gap: .25rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; overflow-x: auto; }
 .tabs a { padding: .55rem .9rem; color: var(--text-2); border-bottom: 2px solid transparent; white-space: nowrap; }

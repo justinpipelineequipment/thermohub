@@ -165,6 +165,37 @@ export async function state({ env, user, url }) {
   };
 }
 
+// Motion periods for the thermostats this user can see: { since, until, periods: { thermostatId: [[start, end], ...] } }.
+// ?hours= (default 24, up to a year), ?thermostat= to limit to one.
+export async function motion({ env, user, url }) {
+  const now = Date.now();
+  const hours = Math.min(8784, Math.max(1, Number(url.searchParams.get('hours')) || 24));
+  const since = now - hours * 3600000;
+  const one = url.searchParams.get('thermostat');
+  const bizIds = P.isPlatform(user) ? (await all(env, 'SELECT id FROM businesses')).map(r => r.id) : [user.businessId];
+  if (!bizIds.length) return { since, until: now, periods: {} };
+  const inList = `IN (${placeholders(bizIds.length)})`;
+  const [bRows, tRows] = await Promise.all([
+    all(env, `SELECT * FROM buildings WHERE business_id ${inList}`, ...bizIds),
+    all(env, `SELECT id, business_id, building_id, reported_at FROM thermostats WHERE business_id ${inList}`, ...bizIds),
+  ]);
+  const visibleBld = new Set(bRows.map(buildingOut).filter(b => P.canViewBuilding(user, b)).map(b => b.id));
+  const visible = new Map(tRows.filter(t => (!one || t.id === one) &&
+    (t.building_id ? visibleBld.has(t.building_id) : P.isBusinessAdmin(user, t.business_id))).map(t => [t.id, t]));
+  if (!visible.size) return { since, until: now, periods: {} };
+
+  const ids = [...visible.keys()];
+  const mRows = await all(env, `SELECT thermostat_id, start_ts, end_ts FROM motion
+    WHERE thermostat_id IN (${placeholders(ids.length)}) AND (end_ts IS NULL OR end_ts >= ?) ORDER BY start_ts`, ...ids, since);
+  const periods = {};
+  for (const m of mRows) {
+    // An open period ends at the last report (the hub may have stopped reporting mid-motion).
+    const end = m.end_ts ?? Math.max(m.start_ts, visible.get(m.thermostat_id).reported_at || now);
+    (periods[m.thermostat_id] = periods[m.thermostat_id] || []).push([Math.max(m.start_ts, since), end]);
+  }
+  return { since, until: now, periods };
+}
+
 // ---------- thermostat control ----------
 export async function setMode({ env, user, params: [id], body }) {
   const t = await getThermostat(env, id);

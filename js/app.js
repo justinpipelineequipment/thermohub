@@ -27,7 +27,32 @@
     live = !!v.live;
     document.title = `${v.title} · ${CONFIG.APP_NAME}`;
     renderNav();
+    // Keep the motion popup open across live re-renders while the pointer is still on it.
+    const id = pop.dataset.id;
+    if (id) showMotion(main.querySelector(`[data-motion="${CSS.escape(id)}"]:hover`));
   }
+
+  // ---------- motion history popup (hover over a motion indicator) ----------
+  const pop = document.createElement('div');
+  pop.className = 'motion-pop';
+  pop.hidden = true;
+  document.body.appendChild(pop);
+
+  function showMotion(el) {
+    const t = el && S.thermostat(el.dataset.motion);
+    if (!t) { pop.hidden = true; pop.dataset.id = ''; return; }
+    pop.dataset.id = t.id;
+    pop.innerHTML = UI.motionPopup(t);
+    pop.hidden = false;
+    const r = el.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+    pop.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px';
+    pop.style.top = (r.bottom + h + 8 > innerHeight ? r.top - h - 6 : r.bottom + 6) + 'px';
+  }
+  document.addEventListener('mouseover', ev => {
+    const el = ev.target.closest('[data-motion]');
+    if (el ? el.dataset.motion !== pop.dataset.id : pop.dataset.id) showMotion(el);
+  });
+  addEventListener('scroll', () => showMotion(null), true);
 
   function renderChrome() {
     document.getElementById('app-name').textContent = CONFIG.APP_NAME;
