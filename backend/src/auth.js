@@ -60,21 +60,45 @@ export function rowToUser(r) {
     buildingIds: JSON.parse(r.building_ids || '[]') };
 }
 
+// Microsoft 365 tenant that owns an email domain (from its public sign-in metadata), cached per Worker instance.
+const DOMAIN_TTL_MS = 24 * 3600 * 1000;
+const domainTenants = new Map();  // domain -> { tid, at }
+async function tenantOfDomain(domain) {
+  const hit = domainTenants.get(domain);
+  if (hit && Date.now() - hit.at < DOMAIN_TTL_MS) return hit.tid;
+  const res = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(domain)}/v2.0/.well-known/openid-configuration`);
+  if (!res.ok && res.status !== 400) throw new HttpError(503, 'Could not reach Microsoft sign-in.');
+  const m = res.ok ? String((await res.json()).issuer || '').match(/microsoftonline\.com\/([0-9a-f-]{36})\//) : null;
+  const tid = m ? m[1] : null;  // 400 / no match: not a Microsoft 365 domain
+  domainTenants.set(domain, { tid, at: Date.now() });
+  return tid;
+}
+// True when the sign-in came from the organization that owns the email's domain, so the address can be trusted
+// even though it isn't the business's own organization.
+const ownsEmail = async (tid, email) => !!email.includes('@') && (await tenantOfDomain(email.split('@')[1])) === tid;
+
 // Resolves the signed-in person to a ThermoHub user (or throws 401/403).
+// Users normally sign in from their business's Microsoft 365 organization; users from other organizations
+// (and platform admins outside PLATFORM_TENANT_ID) are accepted when their organization owns their email domain.
 export async function authenticateUser(req, env) {
   const c = await verifyEntraToken(bearer(req), env);
   const email = String(c.preferred_username || c.email || '').toLowerCase();
   const name = c.name || email;
 
   const admins = String(env.PLATFORM_ADMIN_EMAILS || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
-  if (admins.includes(email) && c.tid === env.PLATFORM_TENANT_ID) {
+  if (admins.includes(email) && (c.tid === env.PLATFORM_TENANT_ID || await ownsEmail(c.tid, email))) {
     return { id: 'platform:' + c.oid, businessId: null, email, name, role: 'platform_admin', buildingIds: [] };
   }
 
-  const biz = await env.DB.prepare('SELECT id FROM businesses WHERE tenant_id = ?').bind(c.tid).first();
-  if (!biz) throw new HttpError(403, 'Your organization has not been set up in ThermoHub yet.');
-  const row = await env.DB.prepare('SELECT * FROM users WHERE business_id = ? AND email = ?').bind(biz.id, email).first();
-  if (!row) throw new HttpError(403, `${email} has not been given access. Ask your Business Admin to add you.`);
+  const rows = (await env.DB.prepare(`SELECT u.*, b.tenant_id AS biz_tenant FROM users u
+    JOIN businesses b ON b.id = u.business_id WHERE u.email = ? ORDER BY u.id`).bind(email).all()).results;
+  let row = rows.find(r => r.biz_tenant === c.tid);
+  if (!row && rows.length && await ownsEmail(c.tid, email)) row = rows[0];
+  if (!row) {
+    const biz = await env.DB.prepare('SELECT id FROM businesses WHERE tenant_id = ?').bind(c.tid).first();
+    throw new HttpError(403, biz ? `${email} has not been given access. Ask your Business Admin to add you.`
+      : 'Your organization has not been set up in ThermoHub yet.');
+  }
   if (row.oid && row.oid !== c.oid) throw new HttpError(403, 'This account does not match the invited user.');
   if (!row.oid) await env.DB.prepare('UPDATE users SET oid = ? WHERE id = ?').bind(c.oid, row.id).run();
   return rowToUser(row);

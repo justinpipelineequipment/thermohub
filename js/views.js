@@ -516,7 +516,8 @@ window.Views = (function () {
       return `<section class="section card pad">
         <div class="row-between"><h2 class="section-title">${esc(biz.name)}</h2>
           ${editing ? '' : `<button class="btn small" data-action="user-new" data-biz="${biz.id}">+ Add user</button>`}</div>
-        <p class="hint">Users sign in with their Microsoft 365 account (${esc(biz.tenantDomain)}).</p>
+        <p class="hint">Users sign in with their Microsoft 365 work account, usually ${esc(biz.tenantDomain || 'your organization')}.
+          People from other organizations can be added by their work email too.</p>
         ${editing ? userForm(blds) : ''}
         <div class="table-wrap"><table class="table">
           <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Buildings</th><th></th></tr></thead>
