@@ -9,10 +9,13 @@ if (-not (Test-Path .venv)) {
 }
 .\.venv\Scripts\python.exe -m pip install -q -r requirements.txt
 
+# Work files go outside OneDrive: syncing locks them and the build fails with "Access is denied".
 .\.venv\Scripts\pyinstaller.exe --noconfirm --clean --name ThermoHubHub --console `
+    --workpath "$env:LOCALAPPDATA\ThermoHubBuild" `
     --collect-submodules aiohomekit --collect-submodules zeroconf `
     --hidden-import win32timezone --hidden-import servicemanager `
     run_hub.py
+if ($LASTEXITCODE) { throw 'PyInstaller failed.' }
 
 $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe") |
     Where-Object { Test-Path $_ } | Select-Object -First 1

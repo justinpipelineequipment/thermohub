@@ -10,6 +10,7 @@
     const [page, id, sub] = location.hash.replace(/^#\/?/, '').split('/');
     switch (page || '') {
       case '': return Views.overview();
+      case 'list': return Views.overview(id);
       case 'building': return Views.buildingPage(id, sub);
       case 'thermostat': return Views.thermostatPage(id);
       case 'schedules': return id ? Views.scheduleEditPage(id, sub) : Views.schedulesPage();
@@ -55,7 +56,7 @@
     const page = location.hash.replace(/^#\/?/, '').split('/')[0];
     const items = [['', 'Overview'], ['schedules', 'Schedules'], ['activity', 'Activity']];
     if (canAdmin) items.push(['users', 'Users'], ['setup', 'Setup']);
-    const active = page === 'building' || page === 'thermostat' ? '' : page === 'hubs' ? 'setup' : page;
+    const active = ['building', 'thermostat', 'list'].includes(page) ? '' : page === 'hubs' ? 'setup' : page;
     document.getElementById('nav').innerHTML = items.map(([k, label]) =>
       `<a href="#/${k}" class="${active === k ? 'active' : ''}">${label}</a>`).join('') +
       (CONFIG.DEMO_MODE ? `<button class="btn small ghost nav-reset" data-action="reset-demo">Reset demo data</button>` : '');

@@ -14,9 +14,56 @@ window.Views = (function () {
     return { title: 'Not found', html: `<div class="empty">That page doesn't exist, or you don't have access to it.</div>` };
   }
 
-  function kpis(items) {
-    return `<div class="kpis">${items.map(([label, val, kind]) =>
-      `<div class="kpi ${kind || ''}"><div class="kpi-val">${val}</div><div class="kpi-label">${esc(label)}</div></div>`).join('')}</div>`;
+  // items: [label, value, kind, filterKey]; a filterKey makes the tile a link to that thermostat list.
+  function kpis(items, active) {
+    return `<div class="kpis">${items.map(([label, val, kind, key]) => {
+      const body = `<div class="kpi-val">${val}</div><div class="kpi-label">${esc(label)}</div>`;
+      return key
+        ? `<a class="kpi link ${kind || ''}${key === active ? ' active' : ''}" href="#/${key === active ? '' : 'list/' + key}">${body}</a>`
+        : `<div class="kpi ${kind || ''}">${body}</div>`;
+    }).join('')}</div>`;
+  }
+
+  // Thermostat alert or not answering the hub (only meaningful while the hub itself is online).
+  const hasProblem = t => !!t.alert || (!!t.offlineSince && S.hubOnline(t));
+  const holdIs = type => t => { const h = S.effective(t).hold; return !!h && h.type === type; };
+
+  // Overview tile filters: [heading, test].
+  const FILTERS = {
+    all: ['All thermostats', () => true],
+    online: ['Online', t => S.hubOnline(t)],
+    alerts: ['Alerts', hasProblem],
+    motion: ['Motion now', t => S.hubOnline(t) && t.occupied],
+    'motion-override': ['Motion overrides', holdIs('motion')],
+    manual: ['Manual holds', holdIs('manual')],
+    recovery: ['Smart recovery', t => S.effective(t).source === 'recovery'],
+    running: ['Heating / cooling', t => t.equipment === 'heating' || t.equipment === 'cooling'],
+  };
+
+  function statusCell(t, e) {
+    return `${t.offlineSince ? badge('Not responding', 'danger') + ' ' : ''}${t.alert ? badge('Alert', 'danger') + ' ' : ''}${UI.holdBadge(e)}`;
+  }
+
+  function thermostatList(key, ts) {
+    const [heading, test] = FILTERS[key];
+    const list = ts.filter(test);
+    return `<section class="section">
+      <div class="row-between section-head"><h2 class="section-title">${esc(heading)} (${list.length})</h2>
+        <a class="btn small ghost" href="#/">Show buildings</a></div>
+      ${list.length ? `<div class="table-wrap"><table class="table">
+        <thead><tr><th>Thermostat</th><th>Building</th><th>Temp</th><th>Target</th><th>Equipment</th><th>Motion</th><th>Status</th></tr></thead>
+        <tbody>${list.map(t => {
+          const e = S.effective(t), b = S.building(t.buildingId);
+          return `<tr class="row-link" data-href="#/thermostat/${t.id}">
+            <td><a href="#/thermostat/${t.id}">${esc(t.name)}</a>${t.alert ? `<div class="small c-danger">${esc(t.alert)}</div>` : ''}</td>
+            <td class="nowrap">${b ? esc(b.name) : '—'}</td>
+            <td class="num strong">${UI.temp(t.temp)}</td>
+            <td class="num nowrap">${UI.temp(e.heat)}–${UI.temp(e.cool)}</td>
+            <td>${UI.equipBadge(t)}</td>
+            <td class="nowrap">${UI.motionDot(t)}</td>
+            <td>${statusCell(t, e)}</td></tr>`;
+        }).join('')}</tbody></table></div>` : `<div class="empty">None right now.</div>`}
+    </section>`;
   }
 
   function holdCounts(ts) {
@@ -24,6 +71,7 @@ window.Views = (function () {
     return {
       motion: effs.filter(e => e.hold && e.hold.type === 'motion').length,
       manual: effs.filter(e => e.hold && e.hold.type === 'manual').length,
+      local: effs.filter(e => e.hold && e.hold.type === 'local').length,
       recovery: effs.filter(e => e.source === 'recovery').length,
     };
   }
@@ -34,7 +82,8 @@ window.Views = (function () {
   }
 
   // ---------- overview ----------
-  function overview() {
+  function overview(filter) {
+    if (filter && !FILTERS[filter]) filter = null;
     const u = S.currentUser();
     const blds = S.visibleBuildings();
     const ts = blds.flatMap(b => S.thermostatsIn(b.id));
@@ -57,15 +106,16 @@ window.Views = (function () {
         <div class="page-head"><h1>Overview</h1>
           <p class="sub">${esc(Perm.ROLES[u.role])} · ${plural(blds.length, 'building')}</p></div>
         ${kpis([
-          ['Thermostats', ts.length],
-          ['Online', online.length, offline ? 'warn' : 'ok'],
-          ['Motion now', online.filter(t => t.occupied).length, 'motion'],
-          ['Motion overrides', holds.motion, 'motion'],
-          ['Manual holds', holds.manual, 'hold'],
-          ['Smart recovery', holds.recovery, 'recovery'],
-          ['Heating / cooling', `${ts.filter(t => t.equipment === 'heating').length} / ${ts.filter(t => t.equipment === 'cooling').length}`],
-        ])}
-        ${blds.length ? sections : `<div class="empty">No buildings assigned to you yet.</div>`}`,
+          ['Thermostats', ts.length, '', 'all'],
+          ['Online', online.length, offline ? 'warn' : 'ok', 'online'],
+          ['Alerts', ts.filter(hasProblem).length, ts.some(hasProblem) ? 'warn' : 'ok', 'alerts'],
+          ['Motion now', online.filter(t => t.occupied).length, 'motion', 'motion'],
+          ['Motion overrides', holds.motion, 'motion', 'motion-override'],
+          ['Manual holds', holds.manual, 'hold', 'manual'],
+          ['Smart recovery', holds.recovery, 'recovery', 'recovery'],
+          ['Heating / cooling', `${ts.filter(t => t.equipment === 'heating').length} / ${ts.filter(t => t.equipment === 'cooling').length}`, '', 'running'],
+        ], filter)}
+        ${!blds.length ? `<div class="empty">No buildings assigned to you yet.</div>` : filter ? thermostatList(filter, ts) : sections}`,
     };
   }
 
@@ -77,15 +127,18 @@ window.Views = (function () {
     const [openText, openKind] = OPEN_BADGE[S.buildingOpenState(b.id)];
     const holds = holdCounts(ts);
     const motion = ts.filter(t => t.occupied).length;
+    const alerts = ts.filter(hasProblem).length;
     return `<a class="card bcard${online ? '' : ' offline'}" href="#/building/${b.id}">
       <div class="bcard-head"><h3>${esc(b.name)}</h3>
         ${online ? badge(openText, openKind) : badge('Hub offline', 'danger')}</div>
       <div class="bcard-temp">${UI.temp(avg)}<span>avg</span></div>
       <div class="bcard-stats">
+        ${alerts ? `<span class="c-danger">${plural(alerts, 'alert')}</span>` : ''}
         <span>${plural(ts.length, 'thermostat')}</span>
         <span>${motion} with motion</span>
         ${holds.motion ? `<span class="c-motion">${holds.motion} motion override</span>` : ''}
         ${holds.manual ? `<span class="c-hold">${holds.manual} manual hold</span>` : ''}
+        ${holds.local ? `<span class="c-hold">${holds.local} changed at thermostat</span>` : ''}
         ${holds.recovery ? `<span class="c-recovery">${holds.recovery} recovering</span>` : ''}
       </div>
       <div class="tiles">${ts.map(t =>
@@ -128,7 +181,7 @@ window.Views = (function () {
               <td class="nowrap">${esc(S.scheduleOf(t).name)}</td>
               <td>${UI.equipBadge(t)}</td>
               <td class="nowrap">${UI.motionDot(t)}</td>
-              <td>${UI.holdBadge(e)}</td></tr>`;
+              <td>${statusCell(t, e)}</td></tr>`;
           }).join('')}</tbody></table></div>`,
     };
   }
@@ -200,7 +253,8 @@ window.Views = (function () {
     DemoData.DAYS.forEach(d => { days[d] = ['sat', 'sun'].includes(d) ? [] : [{ start: '08:00', end: '17:00' }]; });
     return { name: '', occupied: { heat: 70, cool: 74 }, unoccupied: { heat: 62, cool: 82 }, days,
       motionRule: { enabled: true, holdMinutes: 120, extendOnMotion: true },
-      recovery: { enabled: true, maxMinutes: 120, staggerMinutes: 20 } };
+      recovery: { enabled: true, maxMinutes: 120, staggerMinutes: 20 },
+      localAdjust: { enabled: true, minutes: 60, maxDegrees: 3 } };
   }
 
   function scheduleEditPage(id, newBizId) {
@@ -213,7 +267,8 @@ window.Views = (function () {
 
     if (!schedDraft || schedDraft.id !== id) {
       const data = isNew ? blankSchedule() : clone({ name: existing.name, occupied: existing.occupied,
-        unoccupied: existing.unoccupied, days: existing.days, motionRule: existing.motionRule, recovery: existing.recovery });
+        unoccupied: existing.unoccupied, days: existing.days, motionRule: existing.motionRule, recovery: existing.recovery,
+        localAdjust: S.localAdjustOf(existing) });
       schedDraft = { id, businessId: bizId, data, addIds: [] };
     }
     const d = schedDraft.data;
@@ -295,6 +350,24 @@ window.Views = (function () {
         </div>
 
         <div class="card pad">
+          <h3>Changes at the thermostat</h3>
+          <p class="hint">When someone changes the temperature on a thermostat's screen, it keeps that setting (within the limit)
+            for the set time, then returns to schedule. When off, the hub puts the schedule back within a minute.
+            Mode changes are always put back, and holds set here in the dashboard always win.</p>
+          <label class="check"><input type="checkbox" data-local="enabled"${d.localAdjust.enabled ? ' checked' : ''}${dis}> Allow temporary changes at the thermostat</label>
+          <div class="form-grid">
+            <label class="field">Keep the change for
+              <select class="input" data-local="minutes"${dis}>${[15, 30, 60, 90, 120, 180, 240].map(m =>
+                `<option value="${m}"${m === d.localAdjust.minutes ? ' selected' : ''}>${m < 60 ? m + ' minutes' : (m / 60) + ' hour' + (m === 60 ? '' : 's')}</option>`).join('')}
+              </select></label>
+            <label class="field">Allow up to
+              <select class="input" data-local="maxDegrees"${dis}>${[1, 2, 3, 4, 5, 6, 8, 10].map(n =>
+                `<option value="${n}"${n === d.localAdjust.maxDegrees ? ' selected' : ''}>${n}° warmer or cooler than the schedule</option>`).join('')}
+              </select></label>
+          </div>
+        </div>
+
+        <div class="card pad">
           <h3>Smart recovery</h3>
           <p class="hint">Starts heating or cooling just early enough to reach the occupied temperature right at opening time,
             based on how fast each thermostat's space actually warms or cools. Staggering spreads start times across
@@ -345,6 +418,9 @@ window.Views = (function () {
         <a class="back" href="#/building/${b.id}">← ${esc(b.name)}</a>
         <div class="page-head"><h1>${esc(t.name)}</h1><p class="sub">${esc(b.name)} · ${esc(t.model)}</p></div>
         ${online ? '' : `<div class="alert danger">Hub offline. Showing last known values.</div>`}
+        ${online && t.offlineSince ? `<div class="alert danger"><strong>Not responding</strong> since ${UI.when(t.offlineSince)}.
+          The hub can't reach this thermostat (power, Wi-Fi or network). Showing last known values.</div>` : ''}
+        ${t.alert ? `<div class="alert danger"><strong>Thermostat alert</strong>${t.alertSince ? ` (since ${UI.when(t.alertSince)})` : ''}: ${esc(/[.!?…]$/.test(t.alert) ? t.alert : t.alert + '…')}</div>` : ''}
         <div class="tstat">
           <div class="card pad tstat-main">
             <div class="big-temp">${UI.temp(t.temp)}</div>
@@ -385,6 +461,15 @@ window.Views = (function () {
               : `<p class="muted">${online ? 'You have view-only access.' : 'Controls are unavailable while the hub is offline.'}</p>`}
           </div>
         </div>
+        ${Perm.isBusinessAdmin(u, t.businessId) ? `<div class="card pad">
+          <h3>Name and building</h3>
+          <div class="setup-row">
+            <input class="input" id="tn-${t.id}" value="${esc(t.name)}" aria-label="Thermostat name">
+            <select class="input" id="tb-${t.id}" aria-label="Building">${S.state.buildings.filter(x => x.businessId === t.businessId).map(x =>
+              `<option value="${x.id}"${x.id === t.buildingId ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+            <button class="btn small primary" data-action="t-edit" data-id="${t.id}">Save</button>
+          </div>
+        </div>` : ''}
         <div class="card pad">
           <h3>Recent activity</h3>
           ${events.length ? `<ul class="list">${events.map(a =>
@@ -672,6 +757,14 @@ window.Views = (function () {
       await S.actions.updateThermostat(id, { name: val('tn-' + id).trim(), buildingId });
       UI.toast('Thermostat placed. Give it a schedule profile on the building’s Schedules tab.');
     },
+    't-edit': async el => {
+      const id = el.dataset.id;
+      const name = val('tn-' + id).trim();
+      if (!name) throw new Error('Enter a name.');
+      await S.actions.updateThermostat(id, { name, buildingId: val('tb-' + id) });
+      UI.toast('Thermostat saved');
+      return 'rerender';
+    },
   };
 
   // Keep drafts in sync with typed input; some inputs act immediately.
@@ -690,6 +783,7 @@ window.Views = (function () {
       else if (ds.day) d.days[ds.day][Number(ds.idx)][ds.key] = el.value;
       else if (ds.motion) d.motionRule[ds.motion] = el.type === 'checkbox' ? el.checked : Number(el.value);
       else if (ds.recovery) d.recovery[ds.recovery] = el.type === 'checkbox' ? el.checked : Number(el.value);
+      else if (ds.local) d.localAdjust[ds.local] = el.type === 'checkbox' ? el.checked : Number(el.value);
       else if (ds.addT) {
         schedDraft.addIds = schedDraft.addIds.filter(x => x !== ds.addT);
         if (el.checked) schedDraft.addIds.push(ds.addT);

@@ -14,7 +14,11 @@ window.Store = (function () {
     days: { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] },
     motionRule: { enabled: false, holdMinutes: 120, extendOnMotion: true },
     recovery: { enabled: false, maxMinutes: 120, staggerMinutes: 0 },
+    localAdjust: { enabled: false, minutes: 60, maxDegrees: 3 },
   };
+  // Changes at the thermostat screen, for profiles saved before this setting existed.
+  const DEFAULT_LOCAL_ADJUST = { enabled: true, minutes: 60, maxDegrees: 3 };
+  const localAdjustOf = s => s.localAdjust || DEFAULT_LOCAL_ADJUST;
 
   function load() {
     try {
@@ -176,6 +180,9 @@ window.Store = (function () {
     const r = s.recovery;
     if (!(r.maxMinutes >= 15 && r.maxMinutes <= 240)) throw new Error('Recovery can start 15–240 minutes early.');
     if (!(r.staggerMinutes >= 0 && r.staggerMinutes <= 60)) throw new Error('Stagger must be 0–60 minutes.');
+    const l = s.localAdjust;
+    if (!(l.minutes >= 15 && l.minutes <= 480)) throw new Error('Changes at the thermostat can last 15–480 minutes.');
+    if (!(l.maxDegrees >= 1 && l.maxDegrees <= 10)) throw new Error('Changes at the thermostat can be limited to 1°–10°.');
   }
 
   const demoActions = {
@@ -254,7 +261,7 @@ window.Store = (function () {
       if (!canEditSchedule(s)) throw new Error('No permission to edit this schedule.');
       validateSchedule(data);
       Object.assign(s, { name: data.name.trim(), occupied: data.occupied, unoccupied: data.unoccupied,
-        days: data.days, motionRule: data.motionRule, recovery: data.recovery });
+        days: data.days, motionRule: data.motionRule, recovery: data.recovery, localAdjust: data.localAdjust });
       log(s.businessId, `Updated schedule "${s.name}" (${thermostatsUsing(sId).length} thermostats)`);
       emit('data');
     },
@@ -410,19 +417,19 @@ window.Store = (function () {
 
   // ---------- demo simulation ----------
   // Motion outside the profile's occupied hours -> hold its occupied comfort setting.
-  // Manual holds are never overridden by motion. (In live mode the hub runs this.)
+  // Manual holds and changes at the thermostat are never overridden by motion. (In live mode the hub runs this.)
   function applyMotionRule(t, now) {
     const s = scheduleOf(t);
     const rule = s.motionRule;
     if (!rule.enabled || !t.occupied) return;
     if (isScheduledOccupied(s, new Date(now))) return;
     const hold = activeHold(t);
-    if (hold && hold.type === 'manual') return;
     const until = now + rule.holdMinutes * 60000;
     if (hold && hold.type === 'motion') {
       if (rule.extendOnMotion) hold.until = until;
       return;
     }
+    if (hold) return;
     t.hold = { type: 'motion', heat: s.occupied.heat, cool: s.occupied.cool, until, by: 'Motion rule' };
     log(t.businessId, `Motion detected at ${labelOf(t)}: comfort hold for ${rule.holdMinutes} min`, t.id, 'Motion rule');
   }
@@ -482,7 +489,7 @@ window.Store = (function () {
     start,
     business, building, thermostat, schedule, user, currentUser, buildingOf, businessOf, scheduleOf,
     thermostatsIn, unplacedIn, thermostatsUsing, buildingsUsing, schedulesFor,
-    visibleBusinesses, visibleBuildings, canEditSchedule,
+    visibleBusinesses, visibleBuildings, canEditSchedule, localAdjustOf,
     isScheduledOccupied, nextScheduleChange, buildingOpenState, effective, activeHold, hubOnline, recoveryPlan,
     actions: DEMO ? demoActions : liveActions,
   };

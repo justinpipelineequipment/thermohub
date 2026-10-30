@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS buildings (
 );
 CREATE INDEX IF NOT EXISTS idx_buildings_business ON buildings(business_id);
 
--- data: JSON { occupied, unoccupied, days, motionRule, recovery }
+-- data: JSON { occupied, unoccupied, days, motionRule, recovery, localAdjust }
 CREATE TABLE IF NOT EXISTS schedules (
   id           TEXT PRIMARY KEY,
   business_id  TEXT NOT NULL REFERENCES businesses(id),

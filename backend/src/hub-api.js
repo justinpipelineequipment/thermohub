@@ -8,7 +8,7 @@ const finite = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const str = (v, max) => String(v == null ? '' : v).slice(0, max);
 
 function cleanHold(h) {
-  if (!h || typeof h !== 'object' || !['manual', 'motion'].includes(h.type)) return null;
+  if (!h || typeof h !== 'object' || !['manual', 'motion', 'local'].includes(h.type)) return null;
   return { type: h.type, heat: finite(h.heat), cool: finite(h.cool), until: finite(h.until), by: str(h.by, 100) };
 }
 
@@ -23,6 +23,9 @@ function cleanState(s) {
     hold: cleanHold(s.hold),
     holdSeq: finite(s.holdSeq),
     recovering: finite(s.recovering),
+    alert: s.alert ? str(s.alert, 500) : null,
+    alertSince: finite(s.alertSince),
+    offlineSince: finite(s.offlineSince),
     rates: s.rates && typeof s.rates === 'object'
       ? { cool: finite(s.rates.cool) || 4, heat: finite(s.rates.heat) || 5 } : { cool: 4, heat: 5 },
   };

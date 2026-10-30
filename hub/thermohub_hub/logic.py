@@ -12,7 +12,11 @@ NO_SCHEDULE = {
     'days': {k: [] for k in DAY_KEYS},
     'motionRule': {'enabled': False, 'holdMinutes': 120, 'extendOnMotion': True},
     'recovery': {'enabled': False, 'maxMinutes': 120, 'staggerMinutes': 0},
+    'localAdjust': {'enabled': False, 'minutes': 60, 'maxDegrees': 3},
 }
+
+# Changes at the thermostat screen, for profiles saved before this setting existed.
+DEFAULT_LOCAL_ADJUST = {'enabled': True, 'minutes': 60, 'maxDegrees': 3}
 
 
 def to_min(hhmm):
@@ -91,22 +95,51 @@ def effective(t, sched, now_ms):
 
 
 def apply_motion_rule(t, sched, now_ms):
-    """Motion outside occupied hours -> hold the occupied comfort setting. Never overrides a manual hold.
-    Returns an audit message when a new motion hold starts."""
+    """Motion outside occupied hours -> hold the occupied comfort setting. Never overrides a manual hold
+    or a change made at the thermostat. Returns an audit message when a new motion hold starts."""
     rule = sched['motionRule']
     if not rule.get('enabled') or not t.occupied or is_scheduled_occupied(sched, now_ms):
         return None
     hold = active_hold(t, now_ms)
-    if hold and hold['type'] == 'manual':
-        return None
     until = now_ms + rule['holdMinutes'] * 60000
     if hold and hold['type'] == 'motion':
         if rule.get('extendOnMotion'):
             hold['until'] = until
         return None
+    if hold:  # manual or a change at the thermostat
+        return None
     t.hold = {'type': 'motion', 'heat': sched['occupied']['heat'], 'cool': sched['occupied']['cool'],
               'until': until, 'by': 'Motion rule'}
     return f"Motion detected at {t.name}: comfort hold for {rule['holdMinutes']} min"
+
+
+def _setting(mode, heat, cool):
+    deg = lambda v: f'{v:g}°'  # noqa: E731
+    return f'heat {deg(heat)}' if mode == 'heat' else f'cool {deg(cool)}' if mode == 'cool' else f'{deg(heat)}–{deg(cool)}'
+
+
+def apply_local_change(t, sched, now_ms, heat, cool):
+    """Someone changed the setpoint at the thermostat's screen. If the profile allows it, hold that setting
+    (kept within maxDegrees of what the hub was targeting) for the set time, then return to schedule.
+    Dashboard holds always win; otherwise the hold is cleared so the hub puts the setting back.
+    Returns an audit message."""
+    rule = sched.get('localAdjust') or DEFAULT_LOCAL_ADJUST
+    hold = active_hold(t, now_ms)
+    if hold and hold['type'] == 'manual':
+        return f'Change at {t.name} undone: it has a hold set from the dashboard'
+    # Limits are relative to the schedule (or motion hold), not to an earlier change at the thermostat.
+    t.hold = hold if hold and hold['type'] == 'motion' else None
+    if not rule.get('enabled'):
+        return f"Change at {t.name} undone: its schedule doesn't allow changes at the thermostat"
+    base = effective(t, sched, now_ms)
+    d = rule['maxDegrees']
+    limit = lambda v, b: b if v is None or b is None else max(b - d, min(b + d, round(v)))  # noqa: E731
+    h, c = limit(heat, base['heat']), limit(cool, base['cool'])
+    t.hold = {'type': 'local', 'heat': h, 'cool': c, 'until': now_ms + rule['minutes'] * 60000, 'by': 'At thermostat'}
+    asked = _setting(t.mode, round(heat) if heat is not None else None, round(cool) if cool is not None else None)
+    got = _setting(t.mode, h, c)
+    return (f"{t.name} changed at the thermostat to {got} for {rule['minutes']} min"
+            + ('' if asked == got else f' ({asked} requested; limit is {d}° from schedule)'))
 
 
 def apply_recovery(t, sched, now_ms, index, count):

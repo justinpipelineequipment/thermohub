@@ -29,9 +29,9 @@ window.UI = (function () {
   function holdBadge(e) {
     if (e.source === 'recovery') return badge('Smart recovery: ready by ' + when(e.readyAt), 'recovery');
     if (!e.hold) return e.source === 'occupied' ? badge('Schedule: occupied', 'ok') : badge('Schedule: after hours', 'muted');
-    return e.hold.type === 'motion'
-      ? badge('Motion override ' + until(e.hold.until), 'motion')
-      : badge('Manual hold ' + until(e.hold.until), 'hold');
+    if (e.hold.type === 'motion') return badge('Motion override ' + until(e.hold.until), 'motion');
+    if (e.hold.type === 'local') return badge('Changed at thermostat ' + until(e.hold.until), 'hold');
+    return badge('Manual hold ' + until(e.hold.until), 'hold');
   }
 
   function equipBadge(t) {

@@ -1,8 +1,11 @@
 # Run: .venv\Scripts\python.exe -m unittest discover -s tests
+import asyncio
 import unittest
 from datetime import datetime
+from types import SimpleNamespace
 
 from thermohub_hub import logic
+from thermohub_hub.devices import SimThermostat
 from thermohub_hub.engine import Engine, Thermo
 
 DAYS = {k: [{'start': '07:00', 'end': '18:00'}] if k not in ('sat', 'sun') else [] for k in logic.DAY_KEYS}
@@ -76,6 +79,119 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(logic.effective(t, SCHED, plan['start'] + 60000)['source'], 'recovery')
         logic.apply_recovery(t, SCHED, ms(2026, 11, 3, 7), 2, 3)
         self.assertIsNone(t.recovering)
+
+
+class LocalChangeTests(unittest.TestCase):
+    def test_change_is_held_within_limits(self):
+        t = thermo()
+        msg = logic.apply_local_change(t, SCHED, MON_9AM, 72.4, 74)
+        self.assertEqual((t.hold['type'], t.hold['heat'], t.hold['cool']), ('local', 72, 74))
+        self.assertEqual(t.hold['until'], MON_9AM + 60 * 60000)  # default 60 min
+        self.assertNotIn('requested', msg)
+        msg = logic.apply_local_change(t, SCHED, MON_9AM, 80, 85)  # limits stay relative to schedule 70/74
+        self.assertEqual((t.hold['heat'], t.hold['cool']), (73, 77))
+        self.assertIn('limit is 3°', msg)
+
+    def test_disabled_or_dashboard_hold_undoes_change(self):
+        t = thermo()
+        off = {**SCHED, 'localAdjust': {'enabled': False, 'minutes': 60, 'maxDegrees': 3}}
+        self.assertIn('undone', logic.apply_local_change(t, off, MON_9AM, 73, 74))
+        self.assertIsNone(t.hold)
+        t.hold = {'type': 'manual', 'heat': 66, 'cool': 78, 'until': None}
+        self.assertIn('undone', logic.apply_local_change(t, SCHED, MON_9AM, 73, 78))
+        self.assertEqual(t.hold['type'], 'manual')
+
+    def test_motion_does_not_replace_local_change(self):
+        t = thermo()
+        logic.apply_local_change(t, SCHED, MON_10PM, 64, 82)
+        t.occupied = True
+        self.assertIsNone(logic.apply_motion_rule(t, SCHED, MON_10PM + 60000))
+        self.assertEqual(t.hold['type'], 'local')
+
+
+class LocalChangeEngineTests(unittest.TestCase):
+    """Hub loop with a simulated thermostat, during occupied hours (70°–74°)."""
+
+    def setUp(self, sched=SCHED):
+        self.eng = Engine.__new__(Engine)
+        self.cfg = {'id': 't1', 'entity': 'climate.sim_thermostat_1', 'buildingId': None, 'scheduleId': 's1',
+                    'mode': 'auto', 'hold': None, 'holdSeq': 0}
+        self.eng.cache = SimpleNamespace(data={'schedules': [sched], 'thermostats': [self.cfg]})
+        self.eng.events = []
+        self.dev = SimThermostat(1)
+        self.t = Thermo(self.dev.entity, 'X', 'ecobee')
+        self.now = MON_9AM
+        self.step()
+        self.step()  # hub has set 70/74 and seen it
+
+    def step(self, minutes=0.25):
+        self.now += int(minutes * 60000)
+        r = asyncio.run(self.dev.read())
+        self.t.prev_reading, self.t.reading = self.t.reading, r
+        asyncio.run(self.eng._control(self.dev, self.t, self.now))
+
+    def test_change_at_screen_lasts_60_min(self):
+        self.assertEqual((self.dev.heat, self.dev.cool), (70, 74))
+        self.dev.heat = 78  # someone at the screen
+        self.step()
+        self.assertEqual((self.t.hold['type'], self.dev.heat), ('local', 73))  # pulled back to the 3° limit
+        self.assertIn('changed at the thermostat', self.eng.events[-1]['text'])
+        self.step(30)
+        self.assertEqual(self.dev.heat, 73)
+        self.step(31)
+        self.assertEqual(self.dev.heat, 70)  # back on schedule
+
+    def test_disabled_puts_it_back_right_away(self):
+        self.setUp({**SCHED, 'localAdjust': {'enabled': False, 'minutes': 60, 'maxDegrees': 3}})
+        self.dev.heat = 72
+        self.step()
+        self.assertEqual((self.t.hold, self.dev.heat), (None, 70))
+
+    def test_mode_changes_put_back_but_dashboard_changes_are_not_local(self):
+        self.dev.mode = 'off'
+        self.step()
+        self.assertEqual(self.dev.mode, 'auto')
+        self.assertIn('Mode changed', self.eng.events[-1]['text'])
+        self.step()
+        self.cfg['mode'] = 'heat'  # from the dashboard
+        self.step()
+        self.step()
+        self.assertEqual((self.dev.mode, self.t.hold), ('heat', None))
+
+
+class AlertTests(unittest.TestCase):
+    def test_alert_logged_when_it_appears_and_clears(self):
+        eng = Engine.__new__(Engine)
+        eng.events = []
+        dev, t = SimThermostat(1), Thermo('climate.sim_thermostat_1', 'X', 'ecobee')
+        check = lambda now: asyncio.run(eng._check_alert(dev, t, now))  # noqa: E731
+        check(MON_9AM)
+        self.assertEqual((t.alert, eng.events), (None, []))
+        dev.alert = 'There may be a problem with the Cooling system.'
+        check(MON_10PM)
+        self.assertEqual((t.alert, t.alert_since, t.alert_checked), (dev.alert, MON_10PM, MON_10PM))
+        self.assertIn('Alert on X: There may be', eng.events[-1]['text'])
+        check(TUE_6AM)
+        self.assertEqual(len(eng.events), 1)  # unchanged: no repeat
+        dev.alert = None
+        check(TUE_6AM + 3600000)
+        self.assertEqual((t.alert, t.alert_since), (None, None))
+        self.assertIn('Alert cleared', eng.events[-1]['text'])
+
+
+class OfflineTests(unittest.TestCase):
+    def test_not_responding_after_two_missed_polls(self):
+        eng = Engine.__new__(Engine)
+        eng.events = []
+        t = Thermo('climate.x', 'X', 'ecobee')
+        eng._missed_poll(t, MON_9AM, TimeoutError('timed out'))
+        self.assertEqual((t.offline_since, eng.events), (None, []))  # one miss is not enough
+        eng._missed_poll(t, MON_9AM + 15000, TimeoutError('timed out'))
+        self.assertEqual(t.offline_since, MON_9AM + 15000)
+        self.assertIn('X is not responding (timed out)', eng.events[-1]['text'])
+        eng._missed_poll(t, MON_9AM + 30000, TimeoutError('timed out'))
+        self.assertEqual(len(eng.events), 1)  # logged once
+        self.assertEqual(t.report()['state']['offlineSince'], MON_9AM + 15000)
 
 
 class EngineMatchTests(unittest.TestCase):

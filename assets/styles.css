@@ -181,6 +181,9 @@ main { flex: 1; min-width: 0; padding: 1.25rem 1.25rem 3rem; }
 .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .85rem 1rem; box-shadow: var(--shadow); }
 .kpi-val { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .kpi-label { color: var(--text-2); font-size: .85rem; }
+a.kpi { color: inherit; text-decoration: none; display: block; }
+a.kpi:hover { border-color: var(--accent); }
+a.kpi.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset, var(--shadow); }
 .kpi.ok .kpi-val { color: var(--ok); }
 .kpi.warn .kpi-val { color: var(--danger); }
 .kpi.motion .kpi-val { color: var(--motion); }
@@ -196,6 +199,7 @@ main { flex: 1; min-width: 0; padding: 1.25rem 1.25rem 3rem; }
 .bcard-stats { display: flex; flex-wrap: wrap; gap: .25rem .9rem; color: var(--text-2); font-size: .85rem; }
 .c-motion { color: var(--motion); font-weight: 600; }
 .c-hold { color: var(--hold); font-weight: 600; }
+.c-danger { color: var(--danger); font-weight: 600; }
 .tiles { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .75rem; }
 .tile {
   font-size: .8rem; font-weight: 600; padding: .2rem .45rem; border-radius: 6px;

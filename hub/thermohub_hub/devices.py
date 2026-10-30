@@ -55,6 +55,9 @@ class HomeKitThermostat:
             'humidity': C.RELATIVE_HUMIDITY_CURRENT,
         }
         chars = {k: thermo[t] for k, t in wanted.items() if thermo.has(t)}
+        # ecobee's own alert ("There may be a problem with the Cooling system..."), read separately and less often
+        if thermo.has(C.VENDOR_ECOBEE_ALERT_TEXT):
+            chars['alert'] = thermo[C.VENDOR_ECOBEE_ALERT_TEXT]
         # ecobee reports its built-in motion sensor as an occupancy sensor on the same accessory
         occ = acc.services.first(service_type=S.OCCUPANCY_SENSOR)
         if occ and occ.has(C.OCCUPANCY_DETECTED):
@@ -64,14 +67,29 @@ class HomeKitThermostat:
     async def read(self):
         if self.chars is None:
             await self._map()
-        res = await self.pairing.get_characteristics([(a, i) for a, i, *_ in self.chars.values()])
-        v = {k: res.get((a, i), {}).get('value') for k, (a, i, *_) in self.chars.items()}
+        chars = {k: c for k, c in self.chars.items() if k != 'alert'}
+        res = await self.pairing.get_characteristics([(a, i) for a, i, *_ in chars.values()])
+        v = {k: res.get((a, i), {}).get('value') for k, (a, i, *_) in chars.items()}
         mode = MODES[v['mode']] if isinstance(v.get('mode'), int) and 0 <= v['mode'] < 4 else 'auto'
         heat, cool = c_to_f(v.get('heat')), c_to_f(v.get('cool'))
         if mode in ('heat', 'cool') and v.get('target') is not None:  # single setpoint modes use TargetTemperature
             heat, cool = (c_to_f(v['target']), cool) if mode == 'heat' else (heat, c_to_f(v['target']))
         return {'temp': c_to_f(v.get('temp')), 'humidity': v.get('humidity'), 'occupied': bool(v.get('occupied')),
                 'equipment': EQUIPMENT.get(v.get('state'), 'idle'), 'mode': mode, 'heat': heat, 'cool': cool}
+
+    async def read_alert(self):
+        """The thermostat's current alert text, or None."""
+        if self.chars is None:
+            await self._map()
+        if 'alert' not in self.chars:
+            return None
+        aid, iid, *_ = self.chars['alert']
+        res = await self.pairing.get_characteristics([(aid, iid)])
+        text = res.get((aid, iid), {}).get('value')
+        if not isinstance(text, str) or not text.strip():
+            return None
+        text = ' '.join(text.split())
+        return text if text[-1] in '.!?…' else text + '…'  # ecobee cuts the text off at about 100 characters
 
     def _put(self, out, key, f):
         if key not in self.chars or f is None:
@@ -181,6 +199,10 @@ class SimThermostat:
         self.mode, self.heat, self.cool = 'auto', 68.0, 75.0
         self.occupied = False
         self.equipment = 'idle'
+        self.alert = None
+
+    async def read_alert(self):
+        return self.alert
 
     async def read(self):
         await asyncio.sleep(0)

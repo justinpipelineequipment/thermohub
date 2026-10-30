@@ -28,21 +28,22 @@ window.DemoData = (function () {
     const sat = [{ start: '08:00', end: '12:00' }];
     const motion = (enabled, holdMinutes) => ({ enabled, holdMinutes, extendOnMotion: true });
     const recovery = () => ({ enabled: true, maxMinutes: 120, staggerMinutes: 20 });
+    const localAdjust = () => ({ enabled: true, minutes: 60, maxDegrees: 3 });
 
     // Schedule profiles: shared by any number of thermostats in a business.
     const schedules = [
       { id: 'sch-1', businessId: 'biz-1', name: 'Office Hours',
         occupied: { heat: 70, cool: 74 }, unoccupied: { heat: 62, cool: 82 },
-        days: days(office, [], []), motionRule: motion(true, 120), recovery: recovery() },
+        days: days(office, [], []), motionRule: motion(true, 120), recovery: recovery(), localAdjust: localAdjust() },
       { id: 'sch-2', businessId: 'biz-1', name: 'Shop Hours',
         occupied: { heat: 66, cool: 76 }, unoccupied: { heat: 58, cool: 85 },
-        days: days(shop, sat, []), motionRule: motion(true, 60), recovery: recovery() },
+        days: days(shop, sat, []), motionRule: motion(true, 60), recovery: recovery(), localAdjust: localAdjust() },
       { id: 'sch-3', businessId: 'biz-1', name: 'Storage / Low Use',
         occupied: { heat: 64, cool: 78 }, unoccupied: { heat: 55, cool: 88 },
-        days: days([], [], []), motionRule: motion(true, 30), recovery: recovery() },
+        days: days([], [], []), motionRule: motion(true, 30), recovery: recovery(), localAdjust: localAdjust() },
       { id: 'sch-4', businessId: 'biz-2', name: 'Office Hours',
         occupied: { heat: 70, cool: 74 }, unoccupied: { heat: 62, cool: 82 },
-        days: days(office, [], []), motionRule: motion(true, 120), recovery: recovery() },
+        days: days(office, [], []), motionRule: motion(true, 120), recovery: recovery(), localAdjust: localAdjust() },
     ];
 
     // [building name, [[thermostat name, schedule id], ...]]

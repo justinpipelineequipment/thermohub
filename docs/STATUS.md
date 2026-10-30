@@ -41,6 +41,20 @@ schedule, manual hold, resume, mode, cloud outage); packaged exe runs.
 
 ## Next steps
 
+Progress 2026-10-29: hub installed on JUSTIN-PC (10.5.4.153), connected. First ecobee paired as `climate.pod1`
+(10.5.4.150; it only appeared after **Set up HomeKit** on the thermostat). Hub is controlling it on a schedule.
+Deployed: changes at the thermostat screen become a temporary hold (per profile, default 60 min, ±3° of
+schedule; mode changes always put back), and thermostats can be renamed/moved on their page.
+Still to confirm on pod1: a change at its screen shows "Changed at thermostat" and reverts after 60 min;
+Hold Action set to "Until I change it". Idea not built yet: pair thermostats from the dashboard.
+2026-10-30: hub reads ecobee's own alert text (HomeKit vendor field) every 30 min and at startup; shown on the dashboard.
+A thermostat that misses 2 polls in a row (~30 s) shows "Not responding" (logged, and logged again when it recovers).
+Overview "Alerts" tile counts both. build.ps1 now builds outside OneDrive (it was silently packaging an old exe).
+Hub, API and dashboard all deployed.
+pod1 has a live alert: "There may be a problem with the Cooling system…" (cooling running, room ~81°F).
+Overview tiles are clickable (`#/list/<filter>` shows the matching thermostats).
+Ideas: email on new alert (paused; sender will be Microsoft 365 via Graph, recipients/triggers not decided); hub-side detection (running a long time without the temperature moving).
+
 1. Dashboard: add the business, its Business Admin, the 10 buildings; **Setup → Pair a hub** and save the token.
 2. On the site's admin PC (same VLAN as the thermostats): run the installer, paste the token, pair **one** ecobee
    (HomeKit code: Main Menu → Settings → HomeKit; remove it from Apple Home first). Set its Hold Action to

@@ -23,6 +23,7 @@ function thermostatOut(r) {
     name: r.name, entity: r.entity, model: r.model || 'ecobee', mode: r.mode,
     temp: s.temp ?? null, humidity: s.humidity ?? null, occupied: !!s.occupied, lastMotion: s.lastMotion ?? null,
     equipment: s.equipment || 'idle', rates: s.rates || { cool: 4, heat: 5 }, recovering: s.recovering ?? null,
+    alert: s.alert || null, alertSince: s.alertSince ?? null, offlineSince: s.offlineSince ?? null,
     // Once the hub has applied the latest hold request it reports the hold it is actually running
     // (including motion holds); until then show what was requested.
     hold: s.holdSeq === r.hold_seq ? (s.hold || null) : parse(r.hold),
@@ -96,6 +97,10 @@ function cleanSchedule(d) {
       extendOnMotion: !!(d.motionRule && d.motionRule.extendOnMotion) },
     recovery: { enabled: !!(d.recovery && d.recovery.enabled), maxMinutes: num(d.recovery && d.recovery.maxMinutes),
       staggerMinutes: num(d.recovery && d.recovery.staggerMinutes) },
+    // Profiles saved before this setting existed allow 60-minute, ±3° changes at the thermostat.
+    localAdjust: d.localAdjust
+      ? { enabled: !!d.localAdjust.enabled, minutes: num(d.localAdjust.minutes), maxDegrees: num(d.localAdjust.maxDegrees) }
+      : { enabled: true, minutes: 60, maxDegrees: 3 },
   };
   for (const k of ['occupied', 'unoccupied']) {
     const p = out[k];
@@ -115,6 +120,8 @@ function cleanSchedule(d) {
   if (!(out.motionRule.holdMinutes >= 15 && out.motionRule.holdMinutes <= 720)) throw new HttpError(400, 'Motion hold time must be 15–720 minutes.');
   if (!(out.recovery.maxMinutes >= 15 && out.recovery.maxMinutes <= 240)) throw new HttpError(400, 'Recovery can start 15–240 minutes early.');
   if (!(out.recovery.staggerMinutes >= 0 && out.recovery.staggerMinutes <= 60)) throw new HttpError(400, 'Stagger must be 0–60 minutes.');
+  if (!(out.localAdjust.minutes >= 15 && out.localAdjust.minutes <= 480)) throw new HttpError(400, 'Changes at the thermostat can last 15–480 minutes.');
+  if (!(out.localAdjust.maxDegrees >= 1 && out.localAdjust.maxDegrees <= 10)) throw new HttpError(400, 'Changes at the thermostat can be limited to 1°–10°.');
   return out;
 }
 
