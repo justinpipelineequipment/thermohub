@@ -187,6 +187,15 @@ class CleanAlertTests(unittest.TestCase):
         self.assertEqual(clean_alert('Filter reminder.'), 'Filter reminder.')
 
 
+class SavedStateTests(unittest.TestCase):
+    def test_last_motion_survives_restart(self):
+        t = thermo()
+        t.last_motion = MON_9AM
+        t2 = thermo()
+        t2.load_saved(t.to_saved())
+        self.assertEqual(t2.last_motion, MON_9AM)
+
+
 class OfflineTests(unittest.TestCase):
     def test_not_responding_after_two_missed_polls(self):
         eng = Engine.__new__(Engine)

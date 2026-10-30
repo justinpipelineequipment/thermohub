@@ -46,12 +46,13 @@ class Thermo:
 
     def to_saved(self):
         return {'hold': self.hold, 'holdSeq': self.hold_seq, 'recovering': self.recovering, 'mode': self.mode,
-                'alert': self.alert, 'alertSince': self.alert_since}
+                'alert': self.alert, 'alertSince': self.alert_since, 'lastMotion': self.last_motion}
 
     def load_saved(self, d):
         self.hold, self.hold_seq = d.get('hold'), d.get('holdSeq')
         self.recovering, self.mode = d.get('recovering'), d.get('mode', 'auto')
         self.alert, self.alert_since = d.get('alert'), d.get('alertSince')
+        self.last_motion = d.get('lastMotion')
 
     def report(self):
         return {'entity': self.entity, 'name': self.name, 'model': self.model, 'state': {
