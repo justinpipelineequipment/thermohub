@@ -19,6 +19,17 @@ def f_to_c(f):
     return round((f - 32) * 5 / 9, 1)
 
 
+def clean_alert(text):
+    """Alert text as read from the ecobee, or None when there is no alert. With nothing pending the ecobee
+    still reports a message ('The Hive is humming along. You have no pending alerts or reminders.')."""
+    if not isinstance(text, str) or not text.strip():
+        return None
+    text = ' '.join(text.split())
+    if re.search(r'no pending alerts', text, re.I):
+        return None
+    return text if text[-1] in '.!?…' else text + '…'  # ecobee cuts the text off at about 100 characters
+
+
 def entity_for(name, taken):
     """Dashboard entity id (climate.<slug>), unique on this hub."""
     base = 'climate.' + (re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_') or 'thermostat')
@@ -85,11 +96,7 @@ class HomeKitThermostat:
             return None
         aid, iid, *_ = self.chars['alert']
         res = await self.pairing.get_characteristics([(aid, iid)])
-        text = res.get((aid, iid), {}).get('value')
-        if not isinstance(text, str) or not text.strip():
-            return None
-        text = ' '.join(text.split())
-        return text if text[-1] in '.!?…' else text + '…'  # ecobee cuts the text off at about 100 characters
+        return clean_alert(res.get((aid, iid), {}).get('value'))
 
     def _put(self, out, key, f):
         if key not in self.chars or f is None:

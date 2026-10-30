@@ -5,7 +5,7 @@ from datetime import datetime
 from types import SimpleNamespace
 
 from thermohub_hub import logic
-from thermohub_hub.devices import SimThermostat
+from thermohub_hub.devices import SimThermostat, clean_alert
 from thermohub_hub.engine import Engine, Thermo
 
 DAYS = {k: [{'start': '07:00', 'end': '18:00'}] if k not in ('sat', 'sun') else [] for k in logic.DAY_KEYS}
@@ -177,6 +177,14 @@ class AlertTests(unittest.TestCase):
         check(TUE_6AM + 3600000)
         self.assertEqual((t.alert, t.alert_since), (None, None))
         self.assertIn('Alert cleared', eng.events[-1]['text'])
+
+
+class CleanAlertTests(unittest.TestCase):
+    def test_no_alert_message_and_truncation(self):
+        self.assertIsNone(clean_alert('The Hive is humming along. You have no pending alerts or reminders.'))
+        self.assertIsNone(clean_alert('  '))
+        self.assertEqual(clean_alert('There may be a problem with  the Cooling'), 'There may be a problem with the Cooling…')
+        self.assertEqual(clean_alert('Filter reminder.'), 'Filter reminder.')
 
 
 class OfflineTests(unittest.TestCase):
