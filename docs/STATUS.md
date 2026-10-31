@@ -53,6 +53,11 @@ Overview "Alerts" tile counts both. build.ps1 now builds outside OneDrive (it wa
 Hub, API and dashboard all deployed.
 pod1 has a live alert: "There may be a problem with the Cooling system…" (cooling running, room ~81°F).
 Overview tiles are clickable (`#/list/<filter>` shows the matching thermostats).
+Motion history: `motion` table (periods, kept 1 year), 24-h timeline on hover and on the thermostat page.
+Sign-in: users from other M365 orgs allowed when their org owns their email domain; justin@triplehtech.com is a
+platform admin. Matt@squareonecompassion.com added; admin consent for squareonecompassion.com being checked.
+Next (later): Rovsun 3-zone mini split (Tuya-based). Plan: re-pair the 3 heads into Smart Life, get local keys via a
+Tuya IoT developer account, then add a Tuya local driver to the hub (each head = one thermostat, no motion).
 Ideas: email on new alert (paused; sender will be Microsoft 365 via Graph, recipients/triggers not decided); hub-side detection (running a long time without the temperature moving).
 
 1. Dashboard: add the business, its Business Admin, the 10 buildings; **Setup → Pair a hub** and save the token.
